@@ -1,26 +1,23 @@
 # Tenant Portal
 
-Minimal login portal that redirects users to the appropriate tenant application (Beyaz Fırın, Leone, etc.).
+Minimal login portal that authenticates users via Firebase and redirects to the appropriate tenant application (Beyaz Fırın, Leone, etc.).
 
 ## Features
 
-- Simple email/password form
-- Redirects to configured tenant URL
+- Beautiful login page matching Beyaz Fırın UI
+- Firebase Authentication (Beyaz Fırın Firestore)
+- Automatic redirect to Beyaz Fırın app after successful login
 - Minimal resource usage (basic-xxs instance on DigitalOcean)
-- Health check endpoint at `/healthz`
+- Static HTML + Firebase JS (no backend needed)
 
 ## Local Development
 
 ```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Option 1: Use Python's built-in HTTP server
+python3 -m http.server 8080
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the server
-uvicorn main:app --reload --port 8080
+# Option 2: Use any static file server
+npx serve -p 8080
 
 # Open browser
 open http://localhost:8080
