@@ -9,8 +9,7 @@ services:
   - name: portal
     dockerfile_path: Dockerfile
     github:
-      # Replace with your repository details
-      repo: YOUR_GITHUB_USERNAME/tenant-portal
+      repo: altunumut24/tenant-portal
       branch: main
       deploy_on_push: true
 
