@@ -256,8 +256,9 @@
           random: Math.random().toString(36).substring(7)
         };
         
-        // Create session token (base64 encoded)
-        const sessionToken = btoa(JSON.stringify(sessionData));
+        // Create session token (base64 encoded, Unicode-safe)
+        // Use encodeURIComponent to handle Turkish characters before base64 encoding
+        const sessionToken = btoa(encodeURIComponent(JSON.stringify(sessionData)));
         
         // Calculate expiry (1 hour from now)
         const expiryTime = Date.now() + (60 * 60 * 1000);
