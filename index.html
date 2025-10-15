@@ -130,23 +130,55 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-    // Beyaz Fırın Firebase Configuration
-    const firebaseConfig = {
-      apiKey: "AIzaSyBZRRg-QNHWwQ7_kkeUeHs3lhHlT6s8uD0",
-      authDomain: "beyaz-firin-ai-analytics.firebaseapp.com",
-      projectId: "beyaz-firin-ai-analytics",
-      storageBucket: "beyaz-firin-ai-analytics.firebasestorage.app",
-      messagingSenderId: "697545287443",
-      appId: "1:697545287443:web:52e1be6860a9e63b8f9ce6",
-      measurementId: "G-P2FTMQYCF3"
+    // Multi-tenant Firebase Configurations
+    const TENANTS = {
+      beyaz: {
+        name: "Beyaz Fırın",
+        url: "https://beyaz-firin-mn2nr.ondigitalocean.app/",
+        firebaseConfig: {
+          apiKey: "AIzaSyBZRRg-QNHWwQ7_kkeUeHs3lhHlT6s8uD0",
+          authDomain: "beyaz-firin-ai-analytics.firebaseapp.com",
+          projectId: "beyaz-firin-ai-analytics",
+          storageBucket: "beyaz-firin-ai-analytics.firebasestorage.app",
+          messagingSenderId: "697545287443",
+          appId: "1:697545287443:web:52e1be6860a9e63b8f9ce6",
+          measurementId: "G-P2FTMQYCF3"
+        },
+        emailDomains: ["beyazfirin", "beyaz"]  // Email contains these strings
+      },
+      leone: {
+        name: "Leone Restaurant",
+        url: "https://leone-agent-2scaz.ondigitalocean.app/",
+        firebaseConfig: {
+          apiKey: "AIzaSyDn5jxd6mD4XKmo09n3m5kJ8B4PAMXV8-A",
+          authDomain: "metacozum-bi-db.firebaseapp.com",
+          projectId: "metacozum-bi-db",
+          storageBucket: "metacozum-bi-db.firebasestorage.app",
+          messagingSenderId: "722091779981",
+          appId: "1:722091779981:web:51020a2b36c36c14c27fc4",
+          measurementId: "G-P2FTMQYCF3"
+        },
+        emailDomains: ["leone"]  // Email contains these strings
+      }
     };
 
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-
-    // Target URL - redirect here after successful login
-    const TARGET_URL = "https://beyaz-firin-mn2nr.ondigitalocean.app/";
+    // Determine tenant from email
+    function getTenantFromEmail(email) {
+      const emailLower = email.toLowerCase();
+      
+      // Check Leone first
+      if (TENANTS.leone.emailDomains.some(domain => emailLower.includes(domain))) {
+        return TENANTS.leone;
+      }
+      
+      // Check Beyaz Fırın
+      if (TENANTS.beyaz.emailDomains.some(domain => emailLower.includes(domain))) {
+        return TENANTS.beyaz;
+      }
+      
+      // Default to Beyaz Fırın if no match
+      return TENANTS.beyaz;
+    }
 
     // DOM Elements
     const loginForm = document.getElementById('loginForm');
@@ -191,6 +223,10 @@
         return;
       }
 
+      // Determine tenant from email
+      const tenant = getTenantFromEmail(email);
+      console.log(`Detected tenant: ${tenant.name} for email: ${email}`);
+
       // Show loading state
       loginButton.disabled = true;
       loginButton.innerHTML = `
@@ -199,17 +235,24 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          Giriş yapılıyor...
+          ${tenant.name} kontrol ediliyor...
         </div>
       `;
 
       try {
+        // Initialize Firebase for this tenant
+        const app = initializeApp(tenant.firebaseConfig, `tenant-${Date.now()}`);
+        const auth = getAuth(app);
+
         // Sign in with Firebase
         await signInWithEmailAndPassword(auth, email, password);
         
-        // Success! Redirect to Beyaz Fırın app
-        window.location.href = TARGET_URL;
+        // Success! Redirect to tenant app
+        console.log(`Login successful. Redirecting to ${tenant.url}`);
+        window.location.href = tenant.url;
       } catch (error) {
+        console.error('Login error:', error);
+        
         // Handle errors
         let errorMsg = 'Giriş sırasında bir hata oluştu';
         
@@ -221,7 +264,7 @@
             errorMsg = 'Bu hesap devre dışı bırakılmış';
             break;
           case 'auth/user-not-found':
-            errorMsg = 'Kullanıcı bulunamadı';
+            errorMsg = 'Kullanıcı bulunamadı. Lütfen doğru uygulamayı kullandığınızdan emin olun.';
             break;
           case 'auth/wrong-password':
             errorMsg = 'Yanlış şifre';
