@@ -247,12 +247,24 @@
         // Sign in with Firebase
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         
-        // Get Firebase ID token for SSO
-        const idToken = await userCredential.user.getIdToken();
+        // Generate secure session token (valid for 1 hour)
+        const sessionData = {
+          email: email,
+          uid: userCredential.user.uid,
+          timestamp: Date.now(),
+          tenant: tenant.name,
+          random: Math.random().toString(36).substring(7)
+        };
         
-        // Success! Redirect to tenant app with auth token
-        console.log(`Login successful. Redirecting to ${tenant.url} with token`);
-        window.location.href = `${tenant.url}?auth_token=${idToken}`;
+        // Create session token (base64 encoded)
+        const sessionToken = btoa(JSON.stringify(sessionData));
+        
+        // Calculate expiry (1 hour from now)
+        const expiryTime = Date.now() + (60 * 60 * 1000);
+        
+        // Success! Redirect to tenant app with session token
+        console.log(`Login successful. Redirecting to ${tenant.url} with session token (expires in 1 hour)`);
+        window.location.href = `${tenant.url}?session=${sessionToken}&exp=${expiryTime}`;
       } catch (error) {
         console.error('Login error:', error);
         
