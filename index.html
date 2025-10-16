@@ -143,8 +143,7 @@
           messagingSenderId: "697545287443",
           appId: "1:697545287443:web:52e1be6860a9e63b8f9ce6",
           measurementId: "G-P2FTMQYCF3"
-        },
-        emailDomains: ["beyazfirin", "beyaz"]  // Email contains these strings
+        }
       },
       leone: {
         name: "Leone Restaurant",
@@ -157,28 +156,10 @@
           messagingSenderId: "722091779981",
           appId: "1:722091779981:web:51020a2b36c36c14c27fc4",
           measurementId: "G-P2FTMQYCF3"
-        },
-        emailDomains: ["leone"]  // Email contains these strings
+        }
       }
     };
 
-    // Determine tenant from email
-    function getTenantFromEmail(email) {
-      const emailLower = email.toLowerCase();
-      
-      // Check Leone first
-      if (TENANTS.leone.emailDomains.some(domain => emailLower.includes(domain))) {
-        return TENANTS.leone;
-      }
-      
-      // Check Beyaz Fırın
-      if (TENANTS.beyaz.emailDomains.some(domain => emailLower.includes(domain))) {
-        return TENANTS.beyaz;
-      }
-      
-      // Default to Beyaz Fırın if no match
-      return TENANTS.beyaz;
-    }
 
     // DOM Elements
     const loginForm = document.getElementById('loginForm');
@@ -210,6 +191,35 @@
       errorMessage.classList.add('hidden');
     }
 
+    // Try to authenticate with a specific tenant
+    async function tryAuthentication(tenant, email, password) {
+      const app = initializeApp(tenant.firebaseConfig, `tenant-${tenant.name}-${Date.now()}`);
+      const auth = getAuth(app);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return { userCredential, tenant };
+    }
+
+    // Generate session token and redirect
+    function redirectToTenant(userCredential, tenant, email) {
+      const sessionData = {
+        email: email,
+        uid: userCredential.user.uid,
+        timestamp: Date.now(),
+        tenant: tenant.name,
+        random: Math.random().toString(36).substring(7)
+      };
+
+      // Create session token (base64 encoded, Unicode-safe)
+      const sessionToken = btoa(encodeURIComponent(JSON.stringify(sessionData)));
+
+      // Calculate expiry (1 hour from now)
+      const expiryTime = Date.now() + (60 * 60 * 1000);
+
+      // Success! Redirect to tenant app with session token
+      console.log(`Login successful for ${tenant.name}. Redirecting to ${tenant.url}`);
+      window.location.href = `${tenant.url}?session=${sessionToken}&exp=${expiryTime}`;
+    }
+
     // Handle form submission
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -223,10 +233,6 @@
         return;
       }
 
-      // Determine tenant from email
-      const tenant = getTenantFromEmail(email);
-      console.log(`Detected tenant: ${tenant.name} for email: ${email}`);
-
       // Show loading state
       loginButton.disabled = true;
       loginButton.innerHTML = `
@@ -235,72 +241,71 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          ${tenant.name} kontrol ediliyor...
+          Kimlik doğrulanıyor...
         </div>
       `;
 
-      try {
-        // Initialize Firebase for this tenant
-        const app = initializeApp(tenant.firebaseConfig, `tenant-${Date.now()}`);
-        const auth = getAuth(app);
+      // Try all tenants in order
+      const tenantsToTry = [TENANTS.beyaz, TENANTS.leone];
+      let lastError = null;
 
-        // Sign in with Firebase
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        
-        // Generate secure session token (valid for 1 hour)
-        const sessionData = {
-          email: email,
-          uid: userCredential.user.uid,
-          timestamp: Date.now(),
-          tenant: tenant.name,
-          random: Math.random().toString(36).substring(7)
-        };
-        
-        // Create session token (base64 encoded, Unicode-safe)
-        // Use encodeURIComponent to handle Turkish characters before base64 encoding
-        const sessionToken = btoa(encodeURIComponent(JSON.stringify(sessionData)));
-        
-        // Calculate expiry (1 hour from now)
-        const expiryTime = Date.now() + (60 * 60 * 1000);
-        
-        // Success! Redirect to tenant app with session token
-        console.log(`Login successful. Redirecting to ${tenant.url} with session token (expires in 1 hour)`);
-        window.location.href = `${tenant.url}?session=${sessionToken}&exp=${expiryTime}`;
-      } catch (error) {
-        console.error('Login error:', error);
-        
-        // Handle errors
-        let errorMsg = 'Giriş sırasında bir hata oluştu';
-        
-        switch (error.code) {
+      for (const tenant of tenantsToTry) {
+        try {
+          console.log(`Trying authentication with ${tenant.name}...`);
+          const { userCredential } = await tryAuthentication(tenant, email, password);
+
+          // Authentication successful!
+          redirectToTenant(userCredential, tenant, email);
+          return; // Stop here, redirect will happen
+
+        } catch (error) {
+          console.log(`Authentication failed for ${tenant.name}:`, error.code);
+          lastError = error;
+
+          // Continue to next tenant unless it's a non-auth error
+          if (error.code !== 'auth/user-not-found' &&
+              error.code !== 'auth/wrong-password' &&
+              error.code !== 'auth/invalid-credential') {
+            // It's a different kind of error (network, invalid email, etc.)
+            break;
+          }
+        }
+      }
+
+      // If we got here, authentication failed for all tenants
+      console.error('Authentication failed for all tenants:', lastError);
+
+      let errorMsg = 'Giriş başarısız. E-posta ve şifrenizi kontrol edin.';
+
+      if (lastError) {
+        switch (lastError.code) {
           case 'auth/invalid-email':
             errorMsg = 'Geçersiz e-posta adresi';
             break;
           case 'auth/user-disabled':
             errorMsg = 'Bu hesap devre dışı bırakılmış';
             break;
-          case 'auth/user-not-found':
-            errorMsg = 'Kullanıcı bulunamadı. Lütfen doğru uygulamayı kullandığınızdan emin olun.';
-            break;
-          case 'auth/wrong-password':
-            errorMsg = 'Yanlış şifre';
-            break;
-          case 'auth/invalid-credential':
-            errorMsg = 'Geçersiz kimlik bilgileri';
-            break;
           case 'auth/too-many-requests':
             errorMsg = 'Çok fazla başarısız deneme. Lütfen daha sonra tekrar deneyin.';
             break;
+          case 'auth/network-request-failed':
+            errorMsg = 'Ağ bağlantısı hatası. İnternet bağlantınızı kontrol edin.';
+            break;
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            errorMsg = 'E-posta veya şifre hatalı. Hiçbir sistemde bu kullanıcı bulunamadı.';
+            break;
           default:
-            errorMsg = error.message || 'Giriş sırasında bir hata oluştu';
+            errorMsg = lastError.message || 'Giriş sırasında bir hata oluştu';
         }
-        
-        showError(errorMsg);
-        
-        // Reset button
-        loginButton.disabled = false;
-        loginButton.textContent = 'Giriş Yap';
       }
+
+      showError(errorMsg);
+
+      // Reset button
+      loginButton.disabled = false;
+      loginButton.textContent = 'Giriş Yap';
     });
   </script>
 </body>
